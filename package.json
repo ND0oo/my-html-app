@@ -1,25 +1,27 @@
 {
   "name": "my-html-app",
   "version": "1.0.0",
-  "description": "QtScrcpy按键映射编辑器",
-  "author": "Your Name",
+  "description": "",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder"
   },
+  "author": "",
+  "license": "ISC",
   "devDependencies": {
-    "electron": "22.3.27",
+    "electron": "^22.0.0",
     "electron-builder": "^23.6.0"
   },
   "build": {
-    "appId": "com.myapp.qtscrcpy",
+    "appId": "com.example.my-html-app",
     "productName": "QtScrcpy编辑器",
     "directories": {
       "output": "dist"
     },
     "win": {
       "target": "nsis"
-    }
+    },
+    "publish": null
   }
 }
