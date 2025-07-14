@@ -1,0 +1,3043 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QtScrcpy按键映射编辑器 - 修复版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+
+        /* ================== EVA初号机主题配色 ================== */
+        body {
+            background: linear-gradient(45deg, #3f6d4e 0%, #734f9a 50%, #3f6d4e 100%);
+            background-size: 200% 100%;
+            animation: gradientShift 10s ease infinite;
+            color: #fff;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* 左侧键盘面板 */
+        .keyboard-panel {
+            width: 20%;
+            min-width: 280px;
+            max-width: 400px;
+            background: rgba(29, 26, 47, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            overflow-y: auto;
+            border-right: 1px solid rgba(139, 212, 80, 0.2);
+            position: relative;
+            z-index: 10;
+            box-shadow: 5px 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .panel-title {
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+            color: #965fd4;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-shadow: 0 0 10px rgba(150, 95, 212, 0.5);
+        }
+
+        .panel-title::before {
+            content: '🕹️';
+            font-size: 1.25rem;
+        }
+
+        .panel-title.no-icon::before {
+            display: none;
+        }
+
+        .keyboard-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 0.75rem;
+            color: #8bd450;
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-shadow: 0 0 5px rgba(139, 212, 80, 0.3);
+        }
+
+        .keys-grid {
+            display: grid;
+            gap: 0.5rem;
+            grid-template-columns: repeat(auto-fill, minmax(3.5rem, 1fr));
+        }
+
+        .key {
+            background: rgba(139, 212, 80, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(139, 212, 80, 0.3);
+            border-radius: 8px;
+            padding: 0.75rem 0.5rem;
+            text-align: center;
+            cursor: grab;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 0.875rem;
+            color: #fff;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .key::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .key:hover::before {
+            opacity: 1;
+        }
+
+        .key:hover {
+            background: rgba(139, 212, 80, 0.2);
+            border-color: rgba(139, 212, 80, 0.5);
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+        }
+
+        .key.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+            transform: scale(0.9);
+        }
+
+        .key.node-type {
+            background: linear-gradient(135deg, rgba(150, 95, 212, 0.1) 0%, rgba(150, 95, 212, 0.05) 100%);
+            border-color: rgba(150, 95, 212, 0.4);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .key.node-type .icon {
+            font-size: 1.25rem;
+        }
+
+        .key.node-type .label {
+            font-size: 0.625rem;
+            opacity: 0.7;
+        }
+
+        /* 中间画布区域 */
+        .canvas-area {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(circle at center, rgba(15, 15, 15, 0.6) 0%, rgba(0, 0, 0, 0.6) 100%);
+            overflow: hidden;
+        }
+
+        .canvas-container {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(29, 26, 47, 0.95);
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            overflow: hidden;
+            border: 1px solid rgba(150, 95, 212, 0.2);
+            transform-origin: center center;
+        }
+
+        #deviceCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        #backgroundImage {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            opacity: 0.4;
+            z-index: 0;
+        }
+
+        /* 映射键样式 */
+        .mapped-key {
+            position: absolute;
+            background: rgba(150, 95, 212, 0.2);
+            backdrop-filter: blur(10px);
+            border: 2px solid #965fd4;
+            border-radius: 50%;
+            width: 3rem;
+            height: 3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: move;
+            z-index: 10; /* 普通按键层级 */
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translate(-50%, -50%);
+            box-shadow: 0 4px 20px rgba(150, 95, 212, 0.5);
+        }
+
+        .mapped-key .key-icon {
+            font-size: 1.25rem;
+            color: #fff;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+        }
+
+        .mapped-key.press-key {
+            background: rgba(139, 212, 80, 0.2);
+            border-color: #8bd450;
+            box-shadow: 0 4px 20px rgba(139, 212, 80, 0.5);
+        }
+
+        .mapped-key.release-key {
+            background: rgba(255, 100, 0, 0.2);
+            border-color: rgba(255, 100, 0, 0.8);
+            box-shadow: 0 4px 20px rgba(255, 100, 0, 0.5);
+        }
+
+        .mapped-key:hover {
+            transform: translate(-50%, -50%) scale(1.15);
+            box-shadow: 0 6px 30px rgba(150, 95, 212, 0.8);
+            z-index: 11;
+        }
+
+        .mapped-key.selected {
+            background: rgba(115, 79, 154, 0.3);
+            border-color: #734f9a;
+            box-shadow: 0 0 0 4px rgba(115, 79, 154, 0.2), 0 6px 30px rgba(115, 79, 154, 0.6);
+        }
+
+        .mapped-key.wheel {
+            width: 16rem; /* 摇杆尺寸放大到16rem */
+            height: 16rem;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            z-index: 5; /* 摇杆层级低于普通按键 */
+        }
+
+        .mapped-key.wheel:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+            z-index: 6; /* 悬停时稍微提高层级 */
+        }
+
+        .mapped-key.view-control {
+            width: 5rem;
+            height: 5rem;
+            background: radial-gradient(circle, rgba(200, 0, 255, 0.15) 0%, rgba(200, 0, 255, 0.05) 100%);
+            border-color: rgba(200, 0, 255, 0.8);
+        }
+
+        .mapped-key.drag-point {
+            background: rgba(255, 0, 110, 0.25);
+            border-color: rgba(255, 0, 110, 0.8);
+            box-shadow: 0 4px 20px rgba(255, 0, 110, 0.5);
+        }
+
+        .mapped-key.directional-cast {
+            background: radial-gradient(circle, rgba(255, 0, 110, 0.3) 0%, transparent 70%);
+            border: 2px solid #ff006e;
+            animation: castPulse 1.5s ease-in-out infinite;
+            border-radius: 50%;
+            width: 5rem;
+            height: 5rem;
+        }
+
+        @keyframes castPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+            50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+        }
+
+        /* 连接线 */
+        .connection-line {
+            position: absolute;
+            stroke: rgba(255, 255, 255, 0.3);
+            stroke-width: 2;
+            stroke-dasharray: 5, 5;
+            fill: none;
+            pointer-events: none;
+            z-index: 5;
+            animation: dash 1s linear infinite;
+        }
+
+        .drag-mapping-line {
+            stroke: #8bd450;
+            stroke-width: 3;
+            filter: drop-shadow(0 0 10px #8bd450);
+            animation: dragFlow 1s linear infinite;
+            stroke-dasharray: 10, 5;
+        }
+
+        @keyframes dash {
+            to { stroke-dashoffset: -10; }
+        }
+
+        @keyframes dragFlow {
+            to { stroke-dashoffset: -20; }
+        }
+
+        /* 删除按钮 */
+        .delete-btn {
+            position: absolute;
+            top: -0.75rem;
+            right: -0.75rem;
+            width: 1.5rem;
+            height: 1.5rem;
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: #fff;
+            z-index: 12;
+            box-shadow: 0 2px 8px rgba(255, 0, 0, 0.4);
+            transition: all 0.2s;
+        }
+
+        .delete-btn:hover {
+            transform: scale(1.2);
+            box-shadow: 0 4px 12px rgba(255, 0, 0, 0.6);
+        }
+
+        .mapped-key:hover .delete-btn {
+            display: flex;
+        }
+
+        /* 工具提示 */
+        .tooltip {
+            position: fixed;
+            background: #3f6d4e; /* 绿色背景 */
+            color: #fff;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            pointer-events: none;
+            z-index: 10000;
+            opacity: 0;
+            transform: translateY(-5px);
+            transition: opacity 0.2s, transform 0.2s;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            white-space: nowrap;
+            max-width: 300px;
+        }
+
+        .tooltip.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-bottom: 4px solid #3f6d4e; /* 绿色箭头 */
+        }
+
+        .tooltip.bottom::after {
+            top: auto;
+            bottom: -4px;
+            border-bottom: none;
+            border-top: 4px solid #3f6d4e; /* 绿色箭头 */
+        }
+
+        /* 右侧属性面板 */
+        .properties-panel {
+            width: 20%;
+            min-width: 250px;
+            max-width: 350px;
+            background: rgba(29, 26, 47, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            border-left: 1px solid rgba(139, 212, 80, 0.2);
+            overflow-y: auto;
+            z-index: 10;
+            box-shadow: -5px 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .property-group {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(139, 212, 80, 0.2);
+            transition: all 0.3s;
+        }
+
+        .property-group:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(139, 212, 80, 0.3);
+        }
+
+        .property-label {
+            font-size: 0.75rem;
+            color: #8bd450;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .property-label .icon {
+            font-size: 1rem;
+        }
+
+        .property-input {
+            width: 100%;
+            padding: 0.625rem 0.875rem;
+            background: rgba(29, 26, 47, 0.3);
+            border: 1px solid rgba(139, 212, 80, 0.2);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.875rem;
+            transition: all 0.3s;
+        }
+
+        .property-input:focus {
+            outline: none;
+            border-color: #8bd450;
+            background: rgba(29, 26, 47, 0.5);
+            box-shadow: 0 0 0 3px rgba(139, 212, 80, 0.2);
+        }
+
+        /* 切换开关 */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 3rem;
+            height: 1.5rem;
+            margin-left: auto;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.1);
+            transition: all 0.3s;
+            border-radius: 1rem;
+            border: 1px solid rgba(139, 212, 80, 0.3);
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 1rem;
+            width: 1rem;
+            left: 0.25rem;
+            bottom: 0.25rem;
+            background: #fff;
+            transition: all 0.3s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        input:checked + .slider {
+            background: linear-gradient(135deg, #3f6d4e, #8bd450);
+            border-color: transparent;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(1.5rem);
+        }
+
+        /* 工具栏 */
+        .toolbar {
+            position: absolute;
+            top: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #734f9a, #965fd4); /* 紫色背景 */
+            backdrop-filter: blur(20px);
+            border-radius: 12px;
+            padding: 0.5rem;
+            display: flex;
+            gap: 0.5rem;
+            z-index: 100;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(139, 212, 80, 0.2);
+        }
+
+        .tool-btn {
+            width: 2.5rem;
+            height: 2.5rem;
+            background: rgba(63, 109, 78, 0.3); /* 绿色背景 */
+            border: 1px solid rgba(139, 212, 80, 0.3);
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            position: relative;
+        }
+
+        .tool-btn:hover {
+            background: rgba(63, 109, 78, 0.5); /* 深绿色悬停 */
+            border-color: rgba(139, 212, 80, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .tool-btn.primary {
+            background: linear-gradient(135deg, #3f6d4e, #8bd450); /* 绿色渐变 */
+            border-color: transparent;
+        }
+
+        .tool-btn.primary:hover {
+            background: linear-gradient(135deg, #4a7d58, #9cde65);
+            box-shadow: 0 4px 20px rgba(0, 200, 255, 0.4);
+        }
+
+        .tool-btn.danger {
+            background: linear-gradient(135deg, #3f6d4e, #8bd450);
+            border-color: transparent;
+        }
+
+        .tool-btn.danger:hover {
+            background: linear-gradient(135deg, #4a7d58, #9cde65);
+            box-shadow: 0 4px 20px rgba(139, 212, 80, 0.4);
+        }
+
+        /* 分辨率设置 */
+        .resolution-settings {
+            position: absolute;
+            bottom: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #3f6d4e; /* 绿色背景 */
+            backdrop-filter: blur(20px);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            z-index: 100;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .resolution-icon {
+            font-size: 1.25rem;
+            color: #999;
+        }
+
+        .resolution-input {
+            width: 4.5rem;
+            padding: 0.375rem 0.625rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.875rem;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .resolution-input:focus {
+            outline: none;
+            border-color: #3a86ff;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        /* 分辨率预设下拉 */
+        .resolution-preset {
+            padding: 0.375rem 0.625rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .resolution-preset:focus {
+            outline: none;
+            border-color: #3a86ff;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 1200px) {
+            .keyboard-panel,
+            .properties-panel {
+                width: 25%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .keyboard-panel,
+            .properties-panel {
+                width: 100%;
+                max-width: 100%;
+                height: 30vh;
+            }
+            
+            .canvas-area {
+                height: 40vh;
+            }
+        }
+
+        /* 新增的拖拽阴影 */
+        .drag-shadow {
+            position: absolute;
+            width: 3rem;
+            height: 3rem;
+            background: rgba(63, 109, 78, 0.3); /* 绿色影子 */
+            border: 2px dashed rgba(63, 109, 78, 0.8);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 999;
+            transform: translate(-50%, -50%);
+        }
+
+        .wheel-canvas {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        
+        /* 合并后的分辨率和缩放控制栏 */
+        .resolution-zoom-container {
+            position: absolute;
+            bottom: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #3f6d4e; /* 绿色背景 */
+            backdrop-filter: blur(20px);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            z-index: 100;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .zoom-icon {
+            font-size: 1.25rem;
+            color: #999;
+        }
+        
+        .zoom-btn {
+            width: 24px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            padding: 0;
+            transition: all 0.2s;
+        }
+
+        .zoom-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .zoom-slider {
+            width: 120px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .zoom-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(135deg, #3f6d4e, #8bd450); /* 绿色滑块 */
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(139, 212, 80, 0.4);
+            margin: 0;
+        }
+
+        .zoom-value {
+            font-size: 0.875rem;
+            color: #fff;
+            min-width: 3rem;
+            text-align: right;
+        }
+        
+        /* 模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1d1a2f, #3f6d4e);
+            border-radius: 16px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(150, 95, 212, 0.2);
+            animation: slideIn 0.3s;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            margin-bottom: 1.5rem;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .modal-title .icon {
+            font-size: 1.5rem;
+        }
+
+        .json-output {
+            background: rgba(29, 26, 47, 0.5);
+            border: 1px solid rgba(139, 212, 80, 0.2);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.75rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+            color: #8bd450;
+        }
+
+        .modal-buttons {
+            margin-top: 1.5rem;
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 0.625rem 1.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(139, 212, 80, 0.3);
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .modal-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(139, 212, 80, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .modal-btn.primary {
+            background: linear-gradient(135deg, #3f6d4e, #8bd450);
+            border-color: transparent;
+        }
+
+        .modal-btn.primary:hover {
+            background: linear-gradient(135deg, #4a7d58, #9cde65);
+            box-shadow: 0 4px 20px rgba(0, 200, 255, 0.4);
+        }
+
+        /* 导入文件输入 */
+        #fileInput,
+        #imageInput {
+            display: none;
+        }
+
+        /* 滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(139, 212, 80, 0.3);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(139, 212, 80, 0.5);
+        }
+
+        /* 空状态 */
+        .empty-state {
+            color: #666;
+            text-align: center;
+            padding: 3rem 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .empty-state .icon {
+            font-size: 3rem;
+            opacity: 0.5;
+        }
+
+        .empty-state .text {
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 左侧键盘面板 -->
+        <div class="keyboard-panel">
+            <h2 class="panel-title">键盘映射</h2>
+            
+            <div class="keyboard-section">
+                <div class="section-title">🔤 字母键</div>
+                <div class="keys-grid" id="letterKeys"></div>
+            </div>
+            
+            <div class="keyboard-section">
+                <div class="section-title">🔢 数字键</div>
+                <div class="keys-grid" id="numberKeys"></div>
+            </div>
+            
+            <div class="keyboard-section">
+                <div class="section-title">🅰️ 功能键</div>
+                <div class="keys-grid" id="functionKeys"></div>
+            </div>
+            
+            <!-- 新增符号键区域 -->
+            <div class="keyboard-section">
+                <div class="section-title">🔣 符号键</div>
+                <div class="keys-grid" id="symbolKeys"></div>
+            </div>
+            
+            <div class="keyboard-section">
+                <div class="section-title">⌨️ 特殊键</div>
+                <div class="keys-grid" id="specialKeys"></div>
+            </div>
+            
+            <!-- 新增方向键区域 -->
+            <div class="keyboard-section">
+                <div class="section-title">↕️ 方向键</div>
+                <div class="keys-grid" id="arrowKeys"></div>
+            </div>
+            
+            <div class="keyboard-section">
+                <div class="section-title">🖱️ 鼠标键</div>
+                <div class="keys-grid" id="mouseKeys"></div>
+            </div>
+        </div>
+        
+        <!-- 中间画布区域 -->
+        <div class="canvas-area">
+            <div class="canvas-container" id="canvasContainer">
+                <img id="backgroundImage" style="display: none;">
+                <svg id="connectionSvg" style="position: absolute; width: 100%; height: 100%; pointer-events: none; z-index: 5;"></svg>
+                <canvas id="deviceCanvas"></canvas>
+            </div>
+            
+            <!-- 工具栏 -->
+            <div class="toolbar">
+                <button class="tool-btn" onclick="uploadBackgroundImage()" data-tooltip="上传背景图片">
+                    <span>🖼️</span>
+                </button>
+                <button class="tool-btn" onclick="clearBackgroundImage()" data-tooltip="清除背景">
+                    <span>🗑️</span>
+                </button>
+                <button class="tool-btn" onclick="editMouseMove()" data-tooltip="鼠标移动映射">
+                    <span>🖱️</span>
+                </button>
+                <button class="tool-btn" onclick="addSteeringWheel()" data-tooltip="添加摇杆">
+                    <span>🎮</span>
+                </button>
+                <button class="tool-btn" onclick="importJSON()" data-tooltip="导入配置">
+                    <span>📁</span>
+                </button>
+                <button class="tool-btn" onclick="exportJSON()" data-tooltip="导出配置">
+                    <span>💾</span>
+                </button>
+                <button class="tool-btn danger" onclick="clearAll()" data-tooltip="清空所有">
+                    <span>🧹</span>
+                </button>
+            </div>
+            
+            <!-- 合并后的分辨率和缩放控制栏 -->
+            <div class="resolution-zoom-container">
+                <span class="resolution-icon">📏</span>
+                <select class="resolution-preset" onchange="applyPresetResolution(this.value)">
+                    <option value="">自定义</option>
+                    <option value="640x480">480p</option>
+                    <option value="1280x720">720p</option>
+                    <option value="1920x1080">1080p</option>
+                    <option value="2560x1440">1440p</option>
+                    <option value="3840x2160">4K</option>
+                </select>
+                <input type="number" class="resolution-input" id="canvasWidth" value="1920">
+                <span style="font-size: 0.875rem; color: #666;">×</span>
+                <input type="number" class="resolution-input" id="canvasHeight" value="1080">
+                <button class="tool-btn" onclick="updateCanvasResolution()" data-tooltip="应用分辨率">
+                    <span>✓</span>
+                </button>
+                
+                <span class="zoom-icon">🔍</span>
+                <button class="zoom-btn" onclick="adjustZoom(-5)">−</button>
+                <input type="range" class="zoom-slider" id="canvasZoom" 
+                       min="25" max="150" step="5" value="100"
+                       oninput="updateCanvasZoom(this.value)">
+                <button class="zoom-btn" onclick="adjustZoom(5)">+</button>
+                <span class="zoom-value" id="zoomValue">100%</span>
+            </div>
+            
+            <!-- 工具提示 -->
+            <div class="tooltip" id="tooltip"></div>
+        </div>
+        
+        <!-- 右侧属性面板 -->
+        <div class="properties-panel">
+            <h2 class="panel-title no-icon">⚙️ 属性设置</h2>
+            <div id="propertyEditor">
+                <div class="empty-state">
+                    <div class="icon">🅰️</div>
+                    <div class="text">选择一个按键以编辑属性</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 文件输入 -->
+    <input type="file" id="fileInput" accept=".json">
+    <input type="file" id="imageInput" accept="image/*">
+    
+    <!-- 导出模态框 -->
+    <div class="modal" id="exportModal">
+        <div class="modal-content">
+            <h3 class="modal-title">
+                <span class="icon">💾</span>
+                <span>导出按键映射</span>
+            </h3>
+            
+            <!-- 新增保存路径设置 -->
+            <div class="property-group" style="margin-bottom: 1rem;">
+                <div class="property-label">
+                    <span class="icon">📁</span>
+                    <span>保存路径</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" class="property-input" id="savePathInput" placeholder="输入保存路径">
+                    <button class="modal-btn" onclick="setSavePath()">设置</button>
+                </div>
+            </div>
+            
+            <!-- 新增脚本名称设置 -->
+            <div class="property-group" style="margin-bottom: 1rem;">
+                <div class="property-label">
+                    <span class="icon">📝</span>
+                    <span>脚本名称</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" class="property-input" id="scriptNameInput" placeholder="输入脚本名称">
+                    <button class="modal-btn" onclick="setScriptName()">设置</button>
+                </div>
+            </div>
+            
+            <div class="json-output" id="jsonOutput"></div>
+            <div class="modal-buttons">
+                <button class="modal-btn" onclick="copyJSON()">
+                    <span>📋</span>
+                    <span>复制</span>
+                </button>
+                <button class="modal-btn primary" onclick="downloadJSON()">
+                    <span>⬇️</span>
+                    <span>下载</span>
+                </button>
+                <button class="modal-btn" onclick="closeModal()">
+                    <span>✕</span>
+                    <span>关闭</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 鼠标移动映射模态框 -->
+    <div class="modal" id="mouseMoveModal">
+        <div class="modal-content">
+            <h3 class="modal-title">
+                <span class="icon">🖱️</span>
+                <span>鼠标移动映射设置</span>
+            </h3>
+            <div class="property-group">
+                <div class="property-label">
+                    <span class="icon">📐</span>
+                    <span>起始位置 X</span>
+                </div>
+                <input class="property-input" type="number" step="0.001" min="0" max="1" 
+                       id="mouseMoveStartX" value="0.5">
+            </div>
+            <div class="property-group">
+                <div class="property-label">
+                    <span class="icon">📐</span>
+                    <span>起始位置 Y</span>
+                </div>
+                <input class="property-input" type="number" step="0.001" min="0" max="1" 
+                       id="mouseMoveStartY" value="0.5">
+            </div>
+            <!-- 改进灵敏度UI -->
+            <div class="property-group">
+                <div class="property-label">
+                    <span class="icon">🎚️</span>
+                    <span>灵敏度设置</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                    <span style="color: #999; font-size: 0.75rem; min-width: 20px;">X:</span>
+                    <input type="range" class="property-input" min="0.1" max="5" step="0.1" 
+                           id="mouseMoveSpeedXSlider" value="3.25" 
+                           oninput="document.getElementById('mouseMoveSpeedX').value = this.value">
+                    <input class="property-input" type="number" step="0.1" min="0.1" max="5" 
+                           id="mouseMoveSpeedX" value="3.25" style="width: 60px;"
+                           oninput="document.getElementById('mouseMoveSpeedXSlider').value = this.value">
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                    <span style="color: #999; font-size: 0.75rem; min-width: 20px;">Y:</span>
+                    <input type="range" class="property-input" min="0.1" max="5" step="0.1" 
+                           id="mouseMoveSpeedYSlider" value="1.25" 
+                           oninput="document.getElementById('mouseMoveSpeedY').value = this.value">
+                    <input class="property-input" type="number" step="0.1" min="0.1" max="5" 
+                           id="mouseMoveSpeedY" value="1.25" style="width: 60px;"
+                           oninput="document.getElementById('mouseMoveSpeedYSlider').value = this.value">
+                </div>
+            </div>
+            <div class="property-group">
+                <div class="property-label">
+                    <span class="icon">⏲️</span>
+                    <span>定时重置视角</span>
+                    <label class="switch">
+                        <input type="checkbox" id="mouseMoveTimedReset">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <!-- 添加触发按键设置 -->
+            <div class="property-group">
+                <div class="property-label">
+                    <span class="icon">🕹️</span>
+                    <span>触发按键</span>
+                </div>
+                <input class="property-input" type="text" id="mouseMoveKey" 
+                       value="Key_QuoteLeft" placeholder="例如: Key_QuoteLeft">
+                <span style="color: #666; font-size: 0.75rem; margin-left: 0.5rem;">默认: ~ 键</span>
+            </div>
+            <!-- 小眼睛按键设置 -->
+            <div class="property-group">
+                <div class="property-label">
+                    <span class="icon">👁️</span>
+                    <span>小眼睛按键</span>
+                </div>
+                <select class="property-input" id="smallEyeKey">
+                    <option value="Key_Alt">Alt键</option>
+                    <option value="ForwardButton">鼠标前进键</option>
+                    <option value="BackButton">鼠标后退键</option>
+                    <option value="">不绑定（屏幕）</option>
+                </select>
+            </div>
+            <div class="property-group">
+                <div class="property-label">
+                    <span class="icon">📐</span>
+                    <span>小眼睛位置 X</span>
+                </div>
+                <input class="property-input" type="number" step="0.001" min="0" max="1" 
+                       id="smallEyePosX" value="0.5">
+            </div>
+            <div class="property-group">
+                <div class="property-label">
+                    <span class="icon">📐</span>
+                    <span>小眼睛位置 Y</span>
+                </div>
+                <input class="property-input" type="number" step="0.001" min="0" max="1" 
+                       id="smallEyePosY" value="0.6">
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn primary" onclick="saveMouseMove()">
+                    <span>✓</span>
+                    <span>保存</span>
+                </button>
+                <button class="modal-btn" onclick="closeMouseMoveModal()">
+                    <span>✕</span>
+                    <span>关闭</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 全局变量
+        let canvas, ctx, canvasContainer, connectionSvg;
+        let mappedKeys = [];
+        let selectedKey = null;
+        let isDragging = false;
+        let draggedElement = null;
+        let dragOffset = { x: 0, y: 0 };
+        let mouseMoveMap = null;
+        let switchKey = 'Key_QuoteLeft';
+        let switchKeyPos = { x: 0.501, y: 0.501 };
+        let canvasResolution = { width: 1920, height: 1080 };
+        let dragShadow = null;
+        // 添加保存路径
+        let savePath = localStorage.getItem('qtscrcpy_save_path') || '';
+        // 添加脚本名称
+        let scriptName = localStorage.getItem('qtscrcpy_script_name') || 'keymap.json';
+        
+        // 键盘布局定义
+        const keyboardLayout = {
+            letters: ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 
+                     'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L',
+                     'Z', 'X', 'C', 'V', 'B', 'N', 'M'],
+            numbers: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+            functions: ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'],
+            // 符号键
+            symbols: [
+                { key: 'QuoteLeft', icon: '`', tooltip: '反引号' },
+                { key: 'Minus', icon: '-', tooltip: '减号' },
+                { key: 'Equal', icon: '=', tooltip: '等号' },
+                { key: 'BracketLeft', icon: '[', tooltip: '左方括号' },
+                { key: 'BracketRight', icon: ']', tooltip: '右方括号' },
+                { key: 'Semicolon', icon: ';', tooltip: '分号' },
+                { key: 'Quote', icon: "'", tooltip: '单引号' },
+                { key: 'Comma', icon: ',', tooltip: '逗号' },
+                { key: 'Period', icon: '.', tooltip: '句号' },
+                { key: 'Slash', icon: '/', tooltip: '斜杠' }
+            ],
+            // 特殊键
+            special: [
+                { key: 'Space', icon: '␣', tooltip: '空格' },
+                { key: 'Enter', icon: '⏎', tooltip: '回车' },
+                { key: 'Tab', icon: '⇥', tooltip: 'Tab' },
+                { key: 'Shift', icon: '⇧', tooltip: 'Shift' },
+                { key: 'Ctrl', icon: '⌃', tooltip: 'Ctrl' },
+                { key: 'Alt', icon: '⌥', tooltip: 'Alt' },
+                { key: 'Escape', icon: '⎋', tooltip: 'Esc' },
+                { key: 'Backspace', icon: '⌫', tooltip: '退格' }
+            ],
+            // 方向键
+            arrows: [
+                { key: 'Up', icon: '↑', tooltip: '上箭头' },
+                { key: 'Down', icon: '↓', tooltip: '下箭头' },
+                { key: 'Left', icon: '←', tooltip: '左箭头' },
+                { key: 'Right', icon: '→', tooltip: '右箭头' }
+            ],
+            // 鼠标键（中文提示）
+            mouse: [
+                { key: 'LeftButton', icon: '🖱️', tooltip: '左键' },
+                { key: 'RightButton', icon: '🖱️', tooltip: '右键' },
+                { key: 'MiddleButton', icon: '🖱️', tooltip: '中键' },
+                { key: 'ForwardButton', icon: '🖱️', tooltip: '前进键' },
+                { key: 'BackButton', icon: '🖱️', tooltip: '后退键' }
+            ]
+        };
+        
+        // 按键类型
+        const keyTypes = {
+            KMT_CLICK: '单击',
+            KMT_CLICK_TWICE: '双击',
+            KMT_STEER_WHEEL: '摇杆',
+            KMT_SMALL_EYE: '自由视角'
+        };
+        
+        // 初始化
+        function init() {
+            canvas = document.getElementById('deviceCanvas');
+            ctx = canvas.getContext('2d');
+            canvasContainer = document.getElementById('canvasContainer');
+            connectionSvg = document.getElementById('connectionSvg');
+            
+            // 设置画布大小
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // 初始化键盘
+            initKeyboard();
+            
+            // 初始化画布事件
+            initCanvasEvents();
+            
+            // 初始化工具提示
+            initTooltips();
+            
+            // 文件输入事件
+            document.getElementById('fileInput').addEventListener('change', handleFileImport);
+            document.getElementById('imageInput').addEventListener('change', handleImageUpload);
+            
+            // 全局鼠标事件
+            document.addEventListener('mousemove', throttledMouseMove);
+            document.addEventListener('mouseup', handleGlobalMouseUp);
+            
+            // 添加快捷键
+            document.addEventListener('keydown', handleKeyDown);
+            
+            // 尝试恢复自动保存
+            restoreAutoSave();
+            
+            // 设置自动保存
+            window.autoSaveTimer = setInterval(autoSave, 30000);
+            
+            // 绘制初始网格
+            drawCanvas();
+        }
+        
+        // 添加节流函数
+        function throttle(func, delay) {
+            let lastCall = 0;
+            return function(...args) {
+                const now = Date.now();
+                if (now - lastCall >= delay) {
+                    lastCall = now;
+                    func.apply(this, args);
+                }
+            };
+        }
+        
+        // 创建拖拽阴影
+        function createDragShadow(x, y, scale = 1) {
+            const shadow = document.createElement('div');
+            shadow.className = 'drag-shadow';
+            shadow.style.left = x + 'px';
+            shadow.style.top = y + 'px';
+            shadow.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            canvasContainer.appendChild(shadow);
+            return shadow;
+        }
+        
+        // 处理键盘事件
+        function handleKeyDown(e) {
+            // Ctrl+S 保存
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                exportJSON();
+            }
+            
+            // Ctrl+O 打开
+            if (e.ctrlKey && e.key === 'o') {
+                e.preventDefault();
+                importJSON();
+            }
+            
+            // Delete 删除选中的键
+            if (e.key === 'Delete' && selectedKey) {
+                deleteKey(selectedKey.id);
+            }
+            
+            // Esc 取消选择
+            if (e.key === 'Escape') {
+                selectKey(null);
+            }
+        }
+        
+        // 自动保存到localStorage
+        function autoSave() {
+            try {
+                const data = {
+                    keyMapNodes: mappedKeys.map(key => ({...key})),
+                    mouseMoveMap: mouseMoveMap,
+                    switchKey: switchKey,
+                    switchKeyPos: switchKeyPos,
+                    timestamp: Date.now()
+                };
+                
+                localStorage.setItem('qtscrcpy_keymap_autosave', JSON.stringify(data));
+            } catch (e) {
+                console.warn('自动保存失败:', e);
+            }
+        }
+        
+        // 添加恢复功能
+        function restoreAutoSave() {
+            try {
+                const saved = localStorage.getItem('qtscrcpy_keymap_autosave');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    const timeDiff = Date.now() - data.timestamp;
+                    
+                    // 如果是24小时内的数据
+                    if (timeDiff < 24 * 60 * 60 * 1000) {
+                        if (confirm('检测到未保存的数据，是否恢复？')) {
+                            loadMapping(data);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('恢复自动保存失败:', e);
+            }
+        }
+        
+        // 清理函数
+        function cleanup() {
+            // 移除所有事件监听器
+            document.removeEventListener('mousemove', throttledMouseMove);
+            document.removeEventListener('mouseup', handleGlobalMouseUp);
+            document.removeEventListener('keydown', handleKeyDown);
+            
+            // 清理定时器
+            if (window.autoSaveTimer) {
+                clearInterval(window.autoSaveTimer);
+            }
+            
+            // 清理DOM引用
+            mappedKeys = [];
+            selectedKey = null;
+            draggedElement = null;
+        }
+        
+        // 在页面卸载时调用
+        window.addEventListener('beforeunload', cleanup);
+        
+        // 节流后的鼠标移动处理
+        const throttledMouseMove = throttle(function(e) {
+            if (!isDragging || !selectedKey || !draggedElement) return;
+            
+            const containerRect = canvasContainer.getBoundingClientRect();
+            
+            // 直接使用鼠标相对于容器的位置
+            let x = (e.clientX - containerRect.left) / containerRect.width;
+            let y = (e.clientY - containerRect.top) / containerRect.height;
+            
+            // 限制在画布范围内
+            x = Math.max(0, Math.min(1, x));
+            y = Math.max(0, Math.min(1, y));
+            
+            // 检查是否悬停在映射键上
+            const dragType = draggedElement.dataset.dragType;
+            const keyType = draggedElement.dataset.keyType;
+            
+            if (selectedKey.type === 'KMT_SMALL_EYE' || selectedKey.type === 'KMT_STEER_WHEEL') {
+                selectedKey.centerPos.x = x;
+                selectedKey.centerPos.y = y;
+            } else {
+                selectedKey.pos.x = x;
+                selectedKey.pos.y = y;
+                selectedKey.pressPos.x = x;
+                selectedKey.pressPos.y = y;
+                selectedKey.releasePos.x = x;
+                selectedKey.releasePos.y = y;
+            }
+            
+            // 更新元素位置
+            updateMappedKeyPositions(selectedKey);
+            
+            // 更新连接线
+            updateConnectionLines();
+            
+            // 实时更新属性面板中的坐标值
+            updateCoordinateInputs();
+            
+            // 更新拖拽阴影位置
+            if (dragShadow) {
+                dragShadow.style.left = (e.clientX - containerRect.left) + 'px';
+                dragShadow.style.top = (e.clientY - containerRect.top) + 'px';
+            }
+        }, 16); // 约60fps
+        
+        // 防抖函数
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+        
+        // 初始化工具提示
+        function initTooltips() {
+            const tooltip = document.getElementById('tooltip');
+            let currentTarget = null;
+            let hideTimeout = null;
+            let observer = null;
+            
+            // 更新tooltip位置的函数
+            const updateTooltipPosition = (target) => {
+                if (!target || !tooltip.classList.contains('show')) return;
+                
+                const rect = target.getBoundingClientRect();
+                const tooltipRect = tooltip.getBoundingClientRect();
+                
+                let left = rect.left + rect.width / 2;
+                let top = rect.bottom + 8;
+                
+                // 确保不超出视口
+                if (left - tooltipRect.width / 2 < 0) {
+                    left = tooltipRect.width / 2;
+                }
+                if (left + tooltipRect.width / 2 > window.innerWidth) {
+                    left = window.innerWidth - tooltipRect.width / 2;
+                }
+                if (top + tooltipRect.height > window.innerHeight) {
+                    top = rect.top - tooltipRect.height - 8;
+                    tooltip.classList.add('bottom');
+                } else {
+                    tooltip.classList.remove('bottom');
+                }
+                
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+                tooltip.style.transform = 'translateX(-50%)';
+            };
+            
+            // 防抖的位置更新函数
+            const debouncedUpdatePosition = debounce(updateTooltipPosition, 50);
+            
+            // 显示tooltip
+            const showTooltip = (target) => {
+                if (hideTimeout) {
+                    clearTimeout(hideTimeout);
+                    hideTimeout = null;
+                }
+                
+                currentTarget = target;
+                const text = target.getAttribute('data-tooltip');
+                tooltip.textContent = text;
+                tooltip.classList.add('show');
+                
+                // 立即更新位置
+                updateTooltipPosition(target);
+                
+                // 使用Intersection Observer监听元素位置变化
+                if (observer) observer.disconnect();
+                observer = new IntersectionObserver(() => {
+                    debouncedUpdatePosition(target);
+                }, { threshold: [0, 1] });
+                observer.observe(target);
+            };
+            
+            // 隐藏tooltip
+            const hideTooltip = () => {
+                hideTimeout = setTimeout(() => {
+                    tooltip.classList.remove('show');
+                    currentTarget = null;
+                    if (observer) {
+                        observer.disconnect();
+                        observer = null;
+                    }
+                }, 100);
+            };
+            
+            // 使用事件委托
+            document.addEventListener('mouseenter', (e) => {
+                if (e.target.hasAttribute('data-tooltip')) {
+                    showTooltip(e.target);
+                }
+            }, true);
+            
+            document.addEventListener('mouseleave', (e) => {
+                if (e.target.hasAttribute('data-tooltip')) {
+                    hideTooltip();
+                }
+            }, true);
+            
+            // 监听滚动和窗口大小变化
+            window.addEventListener('scroll', () => {
+                if (currentTarget) {
+                    debouncedUpdatePosition(currentTarget);
+                }
+            }, true);
+            
+            window.addEventListener('resize', () => {
+                if (currentTarget) {
+                    debouncedUpdatePosition(currentTarget);
+                }
+            });
+        }
+        
+        // 调整画布大小
+        function resizeCanvas() {
+            const container = document.querySelector('.canvas-area');
+            const maxWidth = container.clientWidth * 0.8;
+            const maxHeight = container.clientHeight * 0.8;
+            
+            // 根据设定的分辨率计算宽高比
+            const aspectRatio = canvasResolution.width / canvasResolution.height;
+            
+            let width = maxWidth;
+            let height = width / aspectRatio;
+            
+            if (height > maxHeight) {
+                height = maxHeight;
+                width = height * aspectRatio;
+            }
+            
+            // 设置容器大小
+            canvasContainer.style.width = width + 'px';
+            canvasContainer.style.height = height + 'px';
+            
+            // 设置画布实际像素大小
+            canvas.width = canvasResolution.width;
+            canvas.height = canvasResolution.height;
+            
+            // 更新所有映射键的位置
+            mappedKeys.forEach(keyData => {
+                updateMappedKeyPositions(keyData);
+            });
+            
+            // 更新连接线
+            updateConnectionLines();
+            
+            // 重绘
+            drawCanvas();
+        }
+        
+        // 更新画布分辨率
+        function updateCanvasResolution() {
+            const width = parseInt(document.getElementById('canvasWidth').value) || 1920;
+            const height = parseInt(document.getElementById('canvasHeight').value) || 1080;
+            
+            canvasResolution.width = width;
+            canvasResolution.height = height;
+            
+            resizeCanvas();
+        }
+        
+        // 上传背景图片
+        function uploadBackgroundImage() {
+            document.getElementById('imageInput').click();
+        }
+        
+        // 处理图片上传
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    // 显示图片
+                    const bgImg = document.getElementById('backgroundImage');
+                    bgImg.src = event.target.result;
+                    bgImg.style.display = 'block';
+                    
+                    // 自动调整画布分辨率
+                    if (confirm(`检测到图片分辨率为 ${img.width}x${img.height}，是否调整画布分辨率？`)) {
+                        document.getElementById('canvasWidth').value = img.width;
+                        document.getElementById('canvasHeight').value = img.height;
+                        updateCanvasResolution();
+                    }
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+            
+            e.target.value = '';
+        }
+        
+        // 清除背景图片
+        function clearBackgroundImage() {
+            const img = document.getElementById('backgroundImage');
+            img.style.display = 'none';
+            img.src = '';
+        }
+        
+        // 初始化键盘
+        function initKeyboard() {
+            // 字母键
+            const letterContainer = document.getElementById('letterKeys');
+            keyboardLayout.letters.forEach(letter => {
+                const key = createKeyElement(`Key_${letter}`, letter);
+                letterContainer.appendChild(key);
+            });
+            
+            // 数字键
+            const numberContainer = document.getElementById('numberKeys');
+            keyboardLayout.numbers.forEach(number => {
+                const key = createKeyElement(`Key_${number}`, number);
+                numberContainer.appendChild(key);
+            });
+            
+            // 功能键
+            const functionContainer = document.getElementById('functionKeys');
+            keyboardLayout.functions.forEach(fn => {
+                const key = createKeyElement(`Key_${fn}`, fn, 'function');
+                functionContainer.appendChild(key);
+            });
+            
+            // 符号键
+            const symbolContainer = document.getElementById('symbolKeys');
+            keyboardLayout.symbols.forEach(symbol => {
+                const key = createKeyElement(`Key_${symbol.key}`, symbol.icon, 'symbol');
+                key.setAttribute('data-tooltip', symbol.tooltip);
+                symbolContainer.appendChild(key);
+            });
+            
+            // 特殊键
+            const specialContainer = document.getElementById('specialKeys');
+            keyboardLayout.special.forEach(sp => {
+                const key = createKeyElement(`Key_${sp.key}`, sp.icon, 'special');
+                key.setAttribute('data-tooltip', sp.tooltip);
+                specialContainer.appendChild(key);
+            });
+            
+            // 方向键
+            const arrowContainer = document.getElementById('arrowKeys');
+            keyboardLayout.arrows.forEach(arrow => {
+                const key = createKeyElement(`Key_${arrow.key}`, arrow.icon, 'special');
+                key.setAttribute('data-tooltip', arrow.tooltip);
+                arrowContainer.appendChild(key);
+            });
+            
+            // 鼠标键（中文提示）
+            const mouseContainer = document.getElementById('mouseKeys');
+            keyboardLayout.mouse.forEach(mouse => {
+                const key = createKeyElement(mouse.key, mouse.icon, 'special');
+                key.setAttribute('data-tooltip', mouse.tooltip);
+                mouseContainer.appendChild(key);
+            });
+            
+            // 重新初始化工具提示
+            initTooltips();
+        }
+        
+        // 创建键元素
+        function createKeyElement(keyCode, label, className = '') {
+            const key = document.createElement('div');
+            key.className = `key ${className}`;
+            key.textContent = label;
+            key.dataset.keyCode = keyCode;
+            key.draggable = true;
+            
+            // 拖拽事件
+            key.addEventListener('dragstart', handleDragStart);
+            key.addEventListener('dragend', handleDragEnd);
+            
+            return key;
+        }
+        
+        // 处理拖拽开始
+        function handleDragStart(e) {
+            e.dataTransfer.effectAllowed = 'copy';
+            e.dataTransfer.setData('keyCode', e.target.dataset.keyCode);
+            e.dataTransfer.setData('label', e.target.textContent);
+            e.target.classList.add('dragging');
+        }
+        
+        // 处理拖拽结束
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+        }
+        
+        // 初始化画布事件
+        function initCanvasEvents() {
+            canvasContainer.addEventListener('dragover', handleCanvasDragOver);
+            canvasContainer.addEventListener('drop', handleCanvasDrop);
+            canvasContainer.addEventListener('mousemove', handleCanvasMouseMove);
+            canvasContainer.addEventListener('click', handleCanvasClick);
+        }
+        
+        // 处理画布拖拽悬停
+        function handleCanvasDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        }
+        
+        // 处理画布放置
+        function handleCanvasDrop(e) {
+            e.preventDefault();
+            
+            const keyCode = e.dataTransfer.getData('keyCode');
+            const label = e.dataTransfer.getData('label');
+            
+            const rect = canvasContainer.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width;
+            const y = (e.clientY - rect.top) / rect.height;
+            
+            if (keyCode) {
+                // 创建映射键
+                createMappedKey(keyCode, label, x, y);
+            }
+        }
+        
+        // 处理画布鼠标移动
+        function handleCanvasMouseMove(e) {
+            if (e.dataTransfer || isDragging) return;
+            
+            const rect = canvasContainer.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // 检查是否悬停在映射键上
+            const hoveredKey = getMappedKeyAt(x, y);
+            canvasContainer.style.cursor = hoveredKey ? 'move' : 'default';
+        }
+        
+        // 处理画布点击
+        function handleCanvasClick(e) {
+            const rect = canvasContainer.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // 检查是否点击了映射键
+            const clickedKey = getMappedKeyAt(x, y);
+            selectKey(clickedKey);
+        }
+        
+        // 创建映射键
+        function createMappedKey(keyCode, label, x, y, type = 'KMT_CLICK', config = {}) {
+            // 检查是否已存在相同按键（摇杆类型除外）
+            if (type !== 'KMT_STEER_WHEEL' && keyCode) {
+                const existingKey = mappedKeys.find(k => k.key === keyCode);
+                if (existingKey) {
+                    alert(`按键 ${keyCode} 已经存在于画布上，请选择其他按键或删除现有映射`);
+                    return null;
+                }
+            }
+            
+            const keyData = {
+                id: Date.now() + Math.random(),
+                key: keyCode,
+                label: label,
+                type: type,
+                pos: { x, y },
+                pressPos: { x, y },
+                releasePos: { x, y },
+                scale: 1,
+                resetMove: false,
+                switchMap: false,
+                showMouse: false,
+                resetView: false,
+                ...config
+            };
+            
+            // 如果是摇杆类型，确保设置centerPos
+            if (type === 'KMT_STEER_WHEEL' && !keyData.centerPos) {
+                keyData.centerPos = { x, y };
+                // 设置默认偏移值
+                keyData.leftOffset = keyData.leftOffset || 0.1;
+                keyData.rightOffset = keyData.rightOffset || 0.1;
+                keyData.upOffset = keyData.upOffset || 0.27;
+                keyData.downOffset = keyData.downOffset || 0.2;
+            }
+            
+            mappedKeys.push(keyData);
+            
+            // 创建主按键元素
+            const pressElement = createMappedKeyElement(keyData, 'press');
+            canvasContainer.appendChild(pressElement);
+            
+            // 更新位置
+            updateMappedKeyPositions(keyData);
+            
+            // 选中新创建的键
+            selectKey(keyData);
+            
+            return keyData;
+        }
+        
+        // 创建自由视角按键
+        function createSmallEye(keyCode, centerX, centerY) {
+            // 检查是否已存在相同按键
+            const existingKey = mappedKeys.find(k => k.key === keyCode);
+            if (existingKey) {
+                alert(`按键 ${keyCode} 已经存在于画布上，请选择其他按键或删除现有映射`);
+                return null;
+            }
+            
+            const keyData = {
+                id: Date.now() + Math.random(),
+                key: keyCode,
+                label: '自由视角',
+                type: 'KMT_SMALL_EYE',
+                centerPos: { x: centerX, y: centerY },
+                radius: 0.15,
+                sensitivity: 1.0
+            };
+            
+            mappedKeys.push(keyData);
+            
+            // 创建施法区域
+            const castArea = createMappedKeyElement(keyData);
+            canvasContainer.appendChild(castArea);
+            
+            selectKey(keyData);
+            return keyData;
+        }
+        
+        // 创建映射键元素
+        function createMappedKeyElement(keyData, type = 'press') {
+            const element = document.createElement('div');
+            element.className = 'mapped-key';
+            
+            if (type === 'press') {
+                element.classList.add('press-key');
+                element.dataset.keyId = keyData.id;
+                element.dataset.keyType = 'press';
+            } else {
+                element.classList.add('release-key');
+                element.dataset.keyId = keyData.id;
+                element.dataset.keyType = 'release';
+            }
+            
+            if (keyData.type === 'KMT_SMALL_EYE') {
+                element.classList.add('directional-cast');
+            }
+            
+            // 获取图标 - 使用中文标签
+            let icon = keyData.label;
+            const chineseLabels = {
+                'Key_Space': '空格',
+                'Key_Enter': '回车',
+                'Key_Tab': 'Tab',
+                'Key_Shift': 'Shift',
+                'Key_Ctrl': 'Ctrl',
+                'Key_Alt': 'Alt',
+                'Key_Escape': 'Esc',
+                'Key_Backspace': '退格',
+                'LeftButton': '左键',
+                'RightButton': '右键',
+                'MiddleButton': '中键',
+                'ForwardButton': '前进',
+                'BackButton': '后退'
+            };
+            
+            if (chineseLabels[keyData.key]) {
+                icon = chineseLabels[keyData.key];
+            } else if (keyData.type === 'KMT_STEER_WHEEL') {
+                icon = '摇杆';
+            } else if (keyData.type === 'KMT_SMALL_EYE') {
+                icon = '自由视角';
+            }
+            
+            if (keyData.type === 'KMT_STEER_WHEEL') {
+                element.classList.add('wheel');
+                element.style.width = '16rem';
+                element.style.height = '16rem';
+                element.style.background = 'transparent !important';
+                element.style.border = 'none !important';
+                element.style.boxShadow = 'none !important';
+                
+                // 移除摇杆文字显示
+                element.innerHTML = `
+                    <canvas class="wheel-canvas"></canvas>
+                    <div class="delete-btn" onclick="deleteKey('${keyData.id}')">×</div>
+                `;
+                
+                // 延迟绘制八边形
+                setTimeout(() => drawOctagonWheel(keyData), 0);
+            } else {
+                element.innerHTML = `
+                    <div class="key-icon">${icon}</div>
+                    <div class="delete-btn" onclick="deleteKey('${keyData.id}')">×</div>
+                `;
+            }
+            
+            // 应用缩放
+            if (keyData.scale && keyData.scale !== 1) {
+                element.style.transform = `translate(-50%, -50%) scale(${keyData.scale})`;
+            }
+            
+            // 设置工具提示
+            element.setAttribute('data-tooltip', `${keyData.key} - ${keyTypes[keyData.type] || keyData.type}`);
+            
+            // 拖拽事件
+            element.addEventListener('mousedown', handleMappedKeyMouseDown);
+            
+            return element;
+        }
+        
+        // 绘制八边形摇杆
+        function drawOctagonWheel(keyData) {
+            const element = document.querySelector(`[data-key-id="${keyData.id}"]`);
+            if (!element) return;
+            
+            // 创建或获取canvas
+            let canvas = element.querySelector('.wheel-canvas');
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                canvas.className = 'wheel-canvas';
+                canvas.width = 100;
+                canvas.height = 100;
+                canvas.style.width = '100%';
+                canvas.style.height = '100%';
+                canvas.style.position = 'absolute';
+                canvas.style.top = '0';
+                canvas.style.left = '0';
+                element.appendChild(canvas);
+            }
+            
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            // 清空画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 获取偏移值
+            const upOffset = keyData.upOffset || 0.27;
+            const downOffset = keyData.downOffset || 0.2;
+            const leftOffset = keyData.leftOffset || 0.1;
+            const rightOffset = keyData.rightOffset || 0.1;
+            
+            // 计算八个方向的点（基于偏移值）
+            const baseRadius = 40; // 基础半径
+            const points = [
+                // 上
+                { x: centerX, y: centerY - baseRadius * upOffset / 0.27 },
+                // 右上
+                { x: centerX + baseRadius * rightOffset / 0.1 * 0.707, y: centerY - baseRadius * upOffset / 0.27 * 0.707 },
+                // 右
+                { x: centerX + baseRadius * rightOffset / 0.1, y: centerY },
+                // 右下
+                { x: centerX + baseRadius * rightOffset / 0.1 * 0.707, y: centerY + baseRadius * downOffset / 0.2 * 0.707 },
+                // 下
+                { x: centerX, y: centerY + baseRadius * downOffset / 0.2 },
+                // 左下
+                { x: centerX - baseRadius * leftOffset / 0.1 * 0.707, y: centerY + baseRadius * downOffset / 0.2 * 0.707 },
+                // 左
+                { x: centerX - baseRadius * leftOffset / 0.1, y: centerY },
+                // 左上
+                { x: centerX - baseRadius * leftOffset / 0.1 * 0.707, y: centerY - baseRadius * upOffset / 0.27 * 0.707 }
+            ];
+            
+            // 绘制八边形
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.closePath();
+            
+            // 填充和描边
+            ctx.fillStyle = 'rgba(150, 95, 212, 0.2)';
+            ctx.fill();
+            ctx.strokeStyle = '#965fd4';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // 绘制中心点
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#965fd4';
+            ctx.fill();
+            
+            // 绘制方向指示
+            ctx.font = '10px Arial';
+            ctx.fillStyle = '#8bd450';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // 标记八个方向
+            const directions = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+            points.forEach((point, i) => {
+                ctx.fillText(directions[i], 
+                    centerX + (point.x - centerX) * 1.2, 
+                    centerY + (point.y - centerY) * 1.2
+                );
+            });
+        }
+        
+        // 处理映射键鼠标按下
+        function handleMappedKeyMouseDown(e) {
+            if (e.target.classList.contains('delete-btn')) return;
+            
+            e.preventDefault();
+            
+            const keyId = e.currentTarget.dataset.keyId;
+            const keyData = mappedKeys.find(k => k.id == keyId);
+            
+            if (keyData) {
+                isDragging = true;
+                draggedElement = e.currentTarget;
+                
+                selectKey(keyData);
+                
+                const containerRect = canvasContainer.getBoundingClientRect();
+                
+                // 创建拖拽阴影
+                dragShadow = createDragShadow(
+                    e.clientX - containerRect.left,
+                    e.clientY - containerRect.top,
+                    keyData.scale || 1
+                );
+                
+                dragOffset.x = 0;
+                dragOffset.y = 0;
+            }
+        }
+        
+        // 全局鼠标释放
+        function handleGlobalMouseUp() {
+            if (isDragging) {
+                isDragging = false;
+                draggedElement = null;
+                
+                // 移除拖拽阴影
+                if (dragShadow) {
+                    dragShadow.remove();
+                    dragShadow = null;
+                }
+            }
+        }
+        
+        // 更新映射键位置
+        function updateMappedKeyPositions(keyData) {
+            // 更新按下位置的元素
+            const pressElement = document.querySelector(`[data-key-id="${keyData.id}"][data-key-type="press"]`);
+            if (pressElement) {
+                if (keyData.type === 'KMT_SMALL_EYE') {
+                    pressElement.style.left = (keyData.centerPos.x * 100) + '%';
+                    pressElement.style.top = (keyData.centerPos.y * 100) + '%';
+                } else if (keyData.type === 'KMT_STEER_WHEEL') {
+                    // 摇杆类型也使用 centerPos
+                    pressElement.style.left = (keyData.centerPos.x * 100) + '%';
+                    pressElement.style.top = (keyData.centerPos.y * 100) + '%';
+                } else {
+                    const x = keyData.pos.x * 100;
+                    const y = keyData.pos.y * 100;
+                    pressElement.style.left = x + '%';
+                    pressElement.style.top = y + '%';
+                }
+                
+                if (keyData.scale && keyData.scale !== 1) {
+                    pressElement.style.transform = `translate(-50%, -50%) scale(${keyData.scale})`;
+                }
+            }
+            
+            // 更新连接线
+            updateConnectionLines();
+        }
+        
+        // 更新连接线
+        function updateConnectionLines() {
+            connectionSvg.innerHTML = '';
+        }
+        
+        // 获取指定位置的映射键
+        function getMappedKeyAt(x, y) {
+            const elements = document.querySelectorAll('.mapped-key');
+            
+            for (let element of elements) {
+                const rect = element.getBoundingClientRect();
+                const containerRect = canvasContainer.getBoundingClientRect();
+                
+                const relativeRect = {
+                    left: rect.left - containerRect.left,
+                    right: rect.right - containerRect.left,
+                    top: rect.top - containerRect.top,
+                    bottom: rect.bottom - containerRect.top
+                };
+                
+                if (x >= relativeRect.left && 
+                    x <= relativeRect.right &&
+                    y >= relativeRect.top && 
+                    y <= relativeRect.bottom) {
+                    const keyId = element.dataset.keyId;
+                    return mappedKeys.find(k => k.id == keyId);
+                }
+            }
+            
+            return null;
+        }
+        
+        // 选中键
+        function selectKey(keyData) {
+            // 清除之前的选中状态
+            document.querySelectorAll('.mapped-key').forEach(el => {
+                el.classList.remove('selected');
+            });
+            
+            selectedKey = keyData;
+            
+            if (keyData) {
+                // 选中所有相关元素
+                document.querySelectorAll(`[data-key-id="${keyData.id}"]`).forEach(el => {
+                    el.classList.add('selected');
+                });
+                
+                // 更新属性编辑器
+                updatePropertyEditor();
+            } else {
+                // 清空属性编辑器
+                clearPropertyEditor();
+            }
+        }
+        
+        // 更新属性编辑器
+        function updatePropertyEditor() {
+            if (!selectedKey) {
+                clearPropertyEditor();
+                return;
+            }
+            
+            const editor = document.getElementById('propertyEditor');
+            
+            let html = '';
+            
+            // 摇杆类型不显示按键输入框
+            if (selectedKey.type !== 'KMT_STEER_WHEEL') {
+                html += `
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">🕹️</span>
+                            <span>按键</span>
+                        </div>
+                        <input class="property-input" value="${selectedKey.key}" onchange="updateKeyProp('key', this.value)">
+                    </div>
+                `;
+            }
+            
+            html += `
+                <div class="property-group">
+                    <div class="property-label">
+                        <span class="icon">🏷️</span>
+                        <span>标签</span>
+                    </div>
+                    <input class="property-input" value="${selectedKey.label}" onchange="updateKeyLabel(this.value)">
+                </div>
+                
+                <div class="property-group">
+                    <div class="property-label">
+                        <span class="icon">🎚️</span>
+                        <span>类型</span>
+                    </div>
+                    <select class="property-input" onchange="updateKeyType(this.value)">
+                        ${Object.entries(keyTypes).map(([value, label]) => 
+                            `<option value="${value}" ${selectedKey.type === value ? 'selected' : ''}>${label}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+            `;
+            
+            // 自由视角的属性
+            if (selectedKey.type === 'KMT_SMALL_EYE') {
+                html += `
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">📏</span>
+                            <span>按键大小</span>
+                        </div>
+                        <input class="property-input" type="range" min="0.5" max="2" step="0.1" 
+                               value="${selectedKey.scale || 1}" 
+                               oninput="updateKeyScale(this.value)">
+                        <span style="color: #999; font-size: 0.75rem; margin-left: 0.5rem;">${((selectedKey.scale || 1) * 100).toFixed(0)}%</span>
+                    </div>
+                    
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">📐</span>
+                            <span>中心位置 X</span>
+                        </div>
+                        <input class="property-input" type="number" step="0.001" min="0" max="1" 
+                               value="${selectedKey.centerPos.x.toFixed(3)}" 
+                               onchange="updateKeyPos('x', this.value, 'center')">
+                    </div>
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">📐</span>
+                            <span>中心位置 Y</span>
+                        </div>
+                        <input class="property-input" type="number" step="0.001" min="0" max="1" 
+                               value="${selectedKey.centerPos.y.toFixed(3)}" 
+                               onchange="updateKeyPos('y', this.value, 'center')">
+                    </div>
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">📏</span>
+                            <span>观察范围</span>
+                        </div>
+                        <input class="property-input" type="number" step="0.01" min="0.05" max="0.5" 
+                               value="${selectedKey.radius || 0.15}" 
+                               onchange="updateKeyProp('radius', parseFloat(this.value))">
+                    </div>
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">🎚️</span>
+                            <span>灵敏度</span>
+                        </div>
+                        <input class="property-input" type="range" min="0.1" max="5" step="0.1" 
+                               value="${selectedKey.sensitivity || 1}" 
+                               oninput="updateKeyProp('sensitivity', parseFloat(this.value))">
+                    </div>
+                `;
+            } 
+            // 其他类型的属性
+            else if (selectedKey.type !== 'KMT_STEER_WHEEL') {
+                html += `
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">📏</span>
+                            <span>按键大小</span>
+                        </div>
+                        <input class="property-input" type="range" min="0.5" max="2" step="0.1" 
+                               value="${selectedKey.scale || 1}" 
+                               oninput="updateKeyScale(this.value)">
+                        <span style="color: #999; font-size: 0.75rem; margin-left: 0.5rem;">${((selectedKey.scale || 1) * 100).toFixed(0)}%</span>
+                    </div>
+                    
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">📐</span>
+                            <span>位置 X</span>
+                        </div>
+                        <input class="property-input" type="number" step="0.001" min="0" max="1" 
+                               value="${selectedKey.pos.x.toFixed(3)}" 
+                               onchange="updateKeyPos('x', this.value, 'main')">
+                    </div>
+                    
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">📐</span>
+                            <span>位置 Y</span>
+                        </div>
+                        <input class="property-input" type="number" step="0.001" min="0" max="1" 
+                               value="${selectedKey.pos.y.toFixed(3)}" 
+                               onchange="updateKeyPos('y', this.value, 'main')">
+                    </div>
+                    
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">🖱️</span>
+                            <span>显示鼠标</span>
+                            <label class="switch">
+                                <input type="checkbox" ${selectedKey.showMouse ? 'checked' : ''} 
+                                       onchange="updateKeyProp('showMouse', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">👁️</span>
+                            <span>重置视角</span>
+                            <label class="switch">
+                                <input type="checkbox" ${selectedKey.resetView ? 'checked' : ''} 
+                                       onchange="updateKeyProp('resetView', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">⏲️</span>
+                            <span>重置移动</span>
+                            <label class="switch">
+                                <input type="checkbox" ${selectedKey.resetMove ? 'checked' : ''} 
+                                       onchange="updateKeyProp('resetMove', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">🔄</span>
+                            <span>切换映射</span>
+                            <label class="switch">
+                                <input type="checkbox" ${selectedKey.switchMap ? 'checked' : ''} 
+                                       onchange="updateKeyProp('switchMap', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // 摇杆类型的属性
+            if (selectedKey.type === 'KMT_STEER_WHEEL') {
+                html += `
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">🔼</span>
+                            <span>向上键</span>
+                        </div>
+                        <input class="property-input" value="${selectedKey.upKey || 'Key_W'}" 
+                               onchange="updateKeyProp('upKey', this.value)">
+                    </div>
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">↕️</span>
+                            <span>向上偏移</span>
+                        </div>
+                        <input class="property-input" type="number" step="0.01" min="0" max="1" 
+                               value="${selectedKey.upOffset || 0.27}" 
+                               onchange="updateKeyProp('upOffset', parseFloat(this.value))">
+                    </div>
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">🔽</span>
+                            <span>向下键</span>
+                        </div>
+                        <input class="property-input" value="${selectedKey.downKey || 'Key_S'}" 
+                               onchange="updateKeyProp('downKey', this.value)">
+                    </div>
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">↕️</span>
+                            <span>向下偏移</span>
+                        </div>
+                        <input class="property-input" type="number" step="0.01" min="0" max="1" 
+                               value="${selectedKey.downOffset || 0.2}" 
+                               onchange="updateKeyProp('downOffset', parseFloat(this.value))">
+                    </div>
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">◀️</span>
+                            <span>向左键</span>
+                        </div>
+                        <input class="property-input" value="${selectedKey.leftKey || 'Key_A'}" 
+                               onchange="updateKeyProp('leftKey', this.value)">
+                    </div>
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">↔️</span>
+                            <span>向左偏移</span>
+                        </div>
+                        <input class="property-input" type="number" step="0.01" min="0" max="1" 
+                               value="${selectedKey.leftOffset || 0.1}" 
+                               onchange="updateKeyProp('leftOffset', parseFloat(this.value))">
+                    </div>
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">▶️</span>
+                            <span>向右键</span>
+                        </div>
+                        <input class="property-input" value="${selectedKey.rightKey || 'Key_D'}" 
+                               onchange="updateKeyProp('rightKey', this.value)">
+                    </div>
+                    <div class="property-group">
+                        <div class="property-label">
+                            <span class="icon">↔️</span>
+                            <span>向右偏移</span>
+                        </div>
+                        <input class="property-input" type="number" step="0.01" min="0" max="1" 
+                               value="${selectedKey.rightOffset || 0.1}" 
+                               onchange="updateKeyProp('rightOffset', parseFloat(this.value))">
+                    </div>
+                `;
+            }
+            
+            editor.innerHTML = html;
+        }
+        
+        // 清空属性编辑器
+        function clearPropertyEditor() {
+            document.getElementById('propertyEditor').innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">🅰️</div>
+                    <div class="text">选择一个按键以编辑属性</div>
+                </div>
+            `;
+        }
+        
+        // 更新键标签
+        function updateKeyLabel(label) {
+            if (!selectedKey) return;
+            
+            selectedKey.label = label;
+            
+            // 更新所有相关元素的显示
+            document.querySelectorAll(`[data-key-id="${selectedKey.id}"] .key-icon`).forEach(icon => {
+                if (selectedKey.type === 'KMT_STEER_WHEEL') {
+                    icon.textContent = '摇杆';
+                } else if (selectedKey.type === 'KMT_SMALL_EYE') {
+                    icon.textContent = '自由视角';
+                } else {
+                    const chineseLabels = {
+                        'Key_Space': '空格',
+                        'Key_Enter': '回车',
+                        'Key_Tab': 'Tab',
+                        'Key_Shift': 'Shift',
+                        'Key_Ctrl': 'Ctrl',
+                        'Key_Alt': 'Alt',
+                        'Key_Escape': 'Esc',
+                        'Key_Backspace': '退格',
+                        'LeftButton': '左键',
+                        'RightButton': '右键',
+                        'MiddleButton': '中键',
+                        'ForwardButton': '前进',
+                        'BackButton': '后退'
+                    };
+                    
+                    if (chineseLabels[selectedKey.key]) {
+                        icon.textContent = chineseLabels[selectedKey.key];
+                    } else {
+                        icon.textContent = label;
+                    }
+                }
+            });
+        }
+        
+        // 更新按键缩放
+        function updateKeyScale(scale) {
+            if (!selectedKey) return;
+            
+            selectedKey.scale = parseFloat(scale);
+            
+            // 立即更新所有相关元素的transform
+            document.querySelectorAll(`[data-key-id="${selectedKey.id}"]`).forEach(el => {
+                el.style.transform = `translate(-50%, -50%) scale(${selectedKey.scale})`;
+            });
+            
+            // 更新百分比显示
+            const percentSpan = event.target.nextElementSibling;
+            if (percentSpan) {
+                percentSpan.textContent = (selectedKey.scale * 100).toFixed(0) + '%';
+            }
+        }
+        
+        // 更新键类型
+        function updateKeyType(type) {
+            if (!selectedKey) return;
+            
+            const oldType = selectedKey.type;
+            selectedKey.type = type;
+            
+            // 如果是转向轮，添加默认属性
+            if (type === 'KMT_STEER_WHEEL') {
+                selectedKey.centerPos = {...selectedKey.pos};
+                selectedKey.upKey = selectedKey.upKey || 'Key_W';
+                selectedKey.downKey = selectedKey.downKey || 'Key_S';
+                selectedKey.leftKey = selectedKey.leftKey || 'Key_A';
+                selectedKey.rightKey = selectedKey.rightKey || 'Key_D';
+                // 添加默认offset
+                selectedKey.leftOffset = selectedKey.leftOffset || 0.1;
+                selectedKey.rightOffset = selectedKey.rightOffset || 0.1;
+                selectedKey.upOffset = selectedKey.upOffset || 0.27;
+                selectedKey.downOffset = selectedKey.downOffset || 0.2;
+            } else if (type === 'KMT_SMALL_EYE') {
+                selectedKey.centerPos = {...selectedKey.pos};
+                selectedKey.radius = 0.15;
+                selectedKey.sensitivity = 1.0;
+            }
+            
+            // 重新创建元素
+            document.querySelectorAll(`[data-key-id="${selectedKey.id}"]`).forEach(el => el.remove());
+            
+            if (type === 'KMT_SMALL_EYE') {
+                const pressElement = createMappedKeyElement(selectedKey, 'press');
+                canvasContainer.appendChild(pressElement);
+            } else if (type === 'KMT_STEER_WHEEL') {
+                const pressElement = createMappedKeyElement(selectedKey, 'press');
+                canvasContainer.appendChild(pressElement);
+            } else {
+                const pressElement = createMappedKeyElement(selectedKey, 'press');
+                canvasContainer.appendChild(pressElement);
+            }
+            
+            updateMappedKeyPositions(selectedKey);
+            selectKey(selectedKey);
+        }
+        
+        // 更新键位置
+        function updateKeyPos(axis, value, posType = 'main') {
+            if (!selectedKey) return;
+            
+            const newValue = parseFloat(value);
+            
+            if (selectedKey.type === 'KMT_SMALL_EYE') {
+                if (posType === 'center') {
+                    selectedKey.centerPos[axis] = newValue;
+                }
+            } else if (selectedKey.type === 'KMT_STEER_WHEEL') {
+                if (posType === 'main') {
+                    selectedKey.centerPos[axis] = newValue;
+                }
+            } else {
+                if (posType === 'main') {
+                    selectedKey.pos[axis] = newValue;
+                    selectedKey.pressPos[axis] = newValue;
+                    selectedKey.releasePos[axis] = newValue;
+                }
+            }
+            
+            updateMappedKeyPositions(selectedKey);
+            updateConnectionLines();
+        }
+        
+        // 更新键属性
+        function updateKeyProp(prop, value) {
+            if (!selectedKey) return;
+            selectedKey[prop] = value;
+            
+            // 如果是摇杆的偏移值更新，重绘八边形
+            if (selectedKey.type === 'KMT_STEER_WHEEL' && 
+                ['upOffset', 'downOffset', 'leftOffset', 'rightOffset'].includes(prop)) {
+                drawOctagonWheel(selectedKey);
+            }
+        }
+        
+        // 实时更新坐标输入框的值
+        function updateCoordinateInputs() {
+            if (!selectedKey) return;
+            
+            if (selectedKey.type === 'KMT_SMALL_EYE') {
+                // 自由视角
+                const centerXInput = document.querySelector('#propertyEditor input[onchange*="updateKeyPos(\'x\', this.value, \'center\'"]');
+                const centerYInput = document.querySelector('#propertyEditor input[onchange*="updateKeyPos(\'y\', this.value, \'center\'"]');
+                
+                if (centerXInput) centerXInput.value = selectedKey.centerPos.x.toFixed(3);
+                if (centerYInput) centerYInput.value = selectedKey.centerPos.y.toFixed(3);
+            } else if (selectedKey.type === 'KMT_STEER_WHEEL') {
+                // 摇杆类型
+                const centerXInput = document.querySelector('#propertyEditor input[onchange*="updateKeyPos(\'x\'"][onchange*="\'main\'"]');
+                const centerYInput = document.querySelector('#propertyEditor input[onchange*="updateKeyPos(\'y\'"][onchange*="\'main\'"]');
+                if (centerXInput) centerXInput.value = selectedKey.centerPos.x.toFixed(3);
+                if (centerYInput) centerYInput.value = selectedKey.centerPos.y.toFixed(3);
+            } else {
+                // 更新主位置输入框
+                const xInput = document.querySelector('#propertyEditor input[onchange*="updateKeyPos(\'x\'"][onchange*="\'main\'"]');
+                const yInput = document.querySelector('#propertyEditor input[onchange*="updateKeyPos(\'y\'"][onchange*="\'main\'"]');
+                if (xInput) xInput.value = selectedKey.pos.x.toFixed(3);
+                if (yInput) yInput.value = selectedKey.pos.y.toFixed(3);
+            }
+        }
+        
+        // 删除键
+        function deleteKey(keyId) {
+            const index = mappedKeys.findIndex(k => k.id == keyId);
+            if (index !== -1) {
+                mappedKeys.splice(index, 1);
+                
+                // 删除所有相关元素
+                document.querySelectorAll(`[data-key-id="${keyId}"]`).forEach(el => el.remove());
+                
+                // 删除连接线
+                const line = document.querySelector(`[data-drag-line="${keyId}"]`);
+                if (line) line.remove();
+                
+                if (selectedKey && selectedKey.id == keyId) {
+                    selectKey(null);
+                }
+                
+                updateConnectionLines();
+            }
+        }
+        
+        // 绘制画布
+        function drawCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制背景网格
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            
+            for (let i = 0; i <= 10; i++) {
+                const x = (canvas.width / 10) * i;
+                const y = (canvas.height / 10) * i;
+                
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+            
+            // 绘制鼠标移动区域（紫色）
+            if (mouseMoveMap && mouseMoveMap.startPos) {
+                // 绘制半透明紫色区域
+                ctx.fillStyle = 'rgba(115, 79, 154, 0.15)';
+                ctx.strokeStyle = 'rgba(115, 79, 154, 0.6)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([8, 4]);
+                
+                const size = 80; // 调整大小
+                const x = mouseMoveMap.startPos.x * canvas.width - size / 2;
+                const y = mouseMoveMap.startPos.y * canvas.height - size / 2;
+                
+                // 绘制圆角矩形
+                const radius = 8;
+                ctx.beginPath();
+                ctx.moveTo(x + radius, y);
+                ctx.lineTo(x + size - radius, y);
+                ctx.quadraticCurveTo(x + size, y, x + size, y + radius);
+                ctx.lineTo(x + size, y + size - radius);
+                ctx.quadraticCurveTo(x + size, y + size, x + size - radius, y + size);
+                ctx.lineTo(x + radius, y + size);
+                ctx.quadraticCurveTo(x, y + size, x, y + size - radius);
+                ctx.lineTo(x, y + radius);
+                ctx.quadraticCurveTo(x, y, x + radius, y);
+                ctx.closePath();
+                
+                ctx.fill();
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                // 添加中心点标记
+                ctx.fillStyle = 'rgba(115, 79, 154, 0.8)';
+                ctx.beginPath();
+                ctx.arc(mouseMoveMap.startPos.x * canvas.width, mouseMoveMap.startPos.y * canvas.height, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        
+        // 导入JSON
+        function importJSON() {
+            document.getElementById('fileInput').click();
+        }
+        
+        // 处理文件导入
+        function handleFileImport(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    loadMapping(data);
+                } catch (error) {
+                    alert('导入失败：' + error.message);
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+        }
+        
+        // 加载映射
+        function loadMapping(data) {
+            clearAll();
+            
+            const keyMapNodes = data.keyMapNodes || data.KeyMapNodes || [];
+            
+            keyMapNodes.forEach(node => {
+                let keyData;
+                
+                if (node.type === 'KMT_STEER_WHEEL') {
+                    const centerPos = node.centerPos || { x: 0.5, y: 0.5 };
+                    keyData = createMappedKey(
+                        '',  // 摇杆不需要key，传空字符串
+                        '摇杆', 
+                        centerPos.x, 
+                        centerPos.y,
+                        node.type,
+                        {
+                            upKey: node.upKey,
+                            downKey: node.downKey,
+                            leftKey: node.leftKey,
+                            rightKey: node.rightKey,
+                            centerPos: centerPos,
+                            leftOffset: node.leftOffset || 0.1,
+                            rightOffset: node.rightOffset || 0.1,
+                            upOffset: node.upOffset || 0.27,
+                            downOffset: node.downOffset || 0.2,
+                            scale: node.scale || 1
+                        }
+                    );
+                } else if (node.type === 'KMT_SMALL_EYE') {
+                    keyData = createSmallEye(
+                        node.key || 'Key_Space',
+                        node.centerPos.x || 0.5,
+                        node.centerPos.y || 0.5
+                    );
+                    keyData.radius = node.radius || 0.15;
+                    keyData.sensitivity = node.sensitivity || 1.0;
+                } else {
+                    const pos = node.pos || { x: 0.5, y: 0.5 };
+                    keyData = createMappedKey(
+                        node.key,
+                        node.key.replace('Key_', '').replace('Button', ''),
+                        pos.x,
+                        pos.y,
+                        node.type || 'KMT_CLICK',
+                        {
+                            resetMove: node.resetMove,
+                            switchMap: node.switchMap,
+                            showMouse: node.showMouse,
+                            resetView: node.resetView,
+                            scale: node.scale || 1
+                        }
+                    );
+                }
+            });
+            
+            if (data.mouseMoveMap) {
+                mouseMoveMap = data.mouseMoveMap;
+                // 确保有默认值
+                if (!mouseMoveMap.key) mouseMoveMap.key = 'Key_QuoteLeft';
+                if (!mouseMoveMap.speedRatioX) mouseMoveMap.speedRatioX = 1;
+                if (!mouseMoveMap.speedRatioY) mouseMoveMap.speedRatioY = 1;
+                drawCanvas();
+            }
+            
+            if (data.switchKey) {
+                switchKey = data.switchKey;
+                switchKeyPos = data.switchKeyPos || { x: 0.501, y: 0.501 };
+            }
+        }
+        
+        // 导出JSON
+        function exportJSON() {
+            const data = {
+                keyMapNodes: [],
+                mouseMoveMap: mouseMoveMap,
+                switchKey: switchKey,
+                switchKeyPos: switchKeyPos
+            };
+            
+            // 处理其他按键
+            mappedKeys.forEach(key => {
+                const node = {
+                    key: key.key,
+                    type: key.type,
+                    scale: key.scale || 1
+                };
+                
+                if (key.type === 'KMT_STEER_WHEEL') {
+                    // 删除key属性
+                    delete node.key;
+                    node.comment = "摇杆";
+                    node.centerPos = key.centerPos || key.pos;
+                    node.leftOffset = key.leftOffset || 0.1;
+                    node.rightOffset = key.rightOffset || 0.1;
+                    node.upOffset = key.upOffset || 0.27;
+                    node.downOffset = key.downOffset || 0.2;
+                    node.leftKey = key.leftKey || 'Key_A';
+                    node.rightKey = key.rightKey || 'Key_D';
+                    node.upKey = key.upKey || 'Key_W';
+                    node.downKey = key.downKey || 'Key_S';
+                } else if (key.type === 'KMT_SMALL_EYE') {
+                    node.comment = "自由视角";
+                    node.centerPos = key.centerPos;
+                    node.radius = key.radius || 0.15;
+                    node.sensitivity = key.sensitivity || 1.0;
+                } else {
+                    node.pos = key.pos;
+                    node.resetMove = key.resetMove || false;
+                    node.switchMap = key.switchMap || false;
+                    node.showMouse = key.showMouse || false;
+                    node.resetView = key.resetView || false;
+                }
+                
+                data.keyMapNodes.push(node);
+            });
+            
+            // 鼠标移动映射
+            if (mouseMoveMap && mouseMoveMap.startPos) {
+                data.mouseMoveMap = {
+                    startPos: mouseMoveMap.startPos,
+                    speedRatioX: mouseMoveMap.speedRatioX || 3.25,
+                    speedRatioY: mouseMoveMap.speedRatioY || 1.25,
+                    speedRatio: 10,
+                    smallEyes: {  // 直接作为对象，不是以key为索引
+                        comment: "小眼睛",
+                        type: "KMT_CLICK", 
+                        key: mouseMoveMap.smallEyeKey || 'Key_Alt',
+                        pos: mouseMoveMap.smallEyePos || { x: 0.5, y: 0.6 },
+                        switchMap: false
+                    }
+                };
+            } else {
+                // 默认鼠标移动映射
+                data.mouseMoveMap = {
+                    startPos: { x: 0.5, y: 0.5 },
+                    speedRatioX: 3.25,
+                    speedRatioY: 1.25,
+                    smallEyes: {
+                        comment: "小眼睛",
+                        type: "KMT_CLICK", 
+                        key: 'Key_Alt',
+                        pos: { x: 0.5, y: 0.6 },
+                        switchMap: false
+                    }
+                };
+            }
+            
+            const jsonStr = JSON.stringify(data, null, 4);
+            document.getElementById('jsonOutput').textContent = jsonStr;
+            document.getElementById('savePathInput').value = savePath; // 显示当前保存路径
+            document.getElementById('scriptNameInput').value = scriptName; // 显示当前脚本名称
+            document.getElementById('exportModal').classList.add('show');
+        }
+        
+        // 复制JSON
+        function copyJSON() {
+            const jsonText = document.getElementById('jsonOutput').textContent;
+            navigator.clipboard.writeText(jsonText).then(() => {
+                alert('已复制到剪贴板');
+            });
+        }
+        
+        // 下载JSON
+        function downloadJSON() {
+            const jsonText = document.getElementById('jsonOutput').textContent;
+            // 使用scriptName作为文件名
+            const filename = scriptName;
+            const blob = new Blob([jsonText], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            alert(`已保存到下载目录：${filename}`);
+        }
+        
+        // 设置保存路径
+        function setSavePath() {
+            const pathInput = document.getElementById('savePathInput');
+            savePath = pathInput.value;
+            localStorage.setItem('qtscrcpy_save_path', savePath);
+            alert(`保存路径已更新为：${savePath}`);
+        }
+        
+        // 设置脚本名称
+        function setScriptName() {
+            const nameInput = document.getElementById('scriptNameInput');
+            scriptName = nameInput.value.trim() || 'keymap.json';
+            localStorage.setItem('qtscrcpy_script_name', scriptName);
+            alert(`脚本名称已更新为：${scriptName}`);
+        }
+        
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('exportModal').classList.remove('show');
+        }
+        
+        // 清空所有
+        function clearAll() {
+            mappedKeys = [];
+            selectedKey = null;
+            mouseMoveMap = null;
+            
+            document.querySelectorAll('.mapped-key').forEach(el => el.remove());
+            connectionSvg.innerHTML = '';
+            clearPropertyEditor();
+            drawCanvas();
+        }
+        
+        // 编辑鼠标移动映射
+        function editMouseMove() {
+            const modal = document.getElementById('mouseMoveModal');
+            
+            if (mouseMoveMap) {
+                document.getElementById('mouseMoveStartX').value = mouseMoveMap.startPos?.x || 0.5;
+                document.getElementById('mouseMoveStartY').value = mouseMoveMap.startPos?.y || 0.5;
+                document.getElementById('mouseMoveSpeedX').value = mouseMoveMap.speedRatioX || 3.25;
+                document.getElementById('mouseMoveSpeedY').value = mouseMoveMap.speedRatioY || 1.25;
+                document.getElementById('mouseMoveSpeedXSlider').value = mouseMoveMap.speedRatioX || 3.25;
+                document.getElementById('mouseMoveSpeedYSlider').value = mouseMoveMap.speedRatioY || 1.25;
+                document.getElementById('mouseMoveTimedReset').checked = mouseMoveMap.timedResetView || false;
+                document.getElementById('mouseMoveKey').value = mouseMoveMap.key || 'Key_QuoteLeft';
+                document.getElementById('smallEyeKey').value = mouseMoveMap.smallEyeKey || 'Key_Alt';
+                document.getElementById('smallEyePosX').value = mouseMoveMap.smallEyePos?.x || 0.5;
+                document.getElementById('smallEyePosY').value = mouseMoveMap.smallEyePos?.y || 0.6;
+            } else {
+                // 设置默认值
+                document.getElementById('mouseMoveStartX').value = 0.5;
+                document.getElementById('mouseMoveStartY').value = 0.5;
+                document.getElementById('mouseMoveSpeedX').value = 3.25;
+                document.getElementById('mouseMoveSpeedY').value = 1.25;
+                document.getElementById('mouseMoveSpeedXSlider').value = 3.25;
+                document.getElementById('mouseMoveSpeedYSlider').value = 1.25;
+                document.getElementById('mouseMoveKey').value = 'Key_QuoteLeft';
+                document.getElementById('smallEyeKey').value = 'Key_Alt';
+                document.getElementById('smallEyePosX').value = 0.5;
+                document.getElementById('smallEyePosY').value = 0.6;
+            }
+            
+            modal.classList.add('show');
+        }
+        
+        // 保存鼠标移动映射
+        function saveMouseMove() {
+            mouseMoveMap = {
+                startPos: {
+                    x: parseFloat(document.getElementById('mouseMoveStartX').value),
+                    y: parseFloat(document.getElementById('mouseMoveStartY').value)
+                },
+                speedRatioX: parseFloat(document.getElementById('mouseMoveSpeedX').value),
+                speedRatioY: parseFloat(document.getElementById('mouseMoveSpeedY').value),
+                timedResetView: document.getElementById('mouseMoveTimedReset').checked,
+                key: document.getElementById('mouseMoveKey').value || 'Key_QuoteLeft',
+                smallEyeKey: document.getElementById('smallEyeKey').value || 'Key_Alt',
+                smallEyePos: {
+                    x: parseFloat(document.getElementById('smallEyePosX').value),
+                    y: parseFloat(document.getElementById('smallEyePosY').value)
+                }
+            };
+            
+            // 自动创建小眼睛按键
+            if (mouseMoveMap.smallEyeKey && mouseMoveMap.smallEyeKey !== '') {
+                const existingKey = mappedKeys.find(k => k.key === mouseMoveMap.smallEyeKey);
+                if (!existingKey) {
+                    createMappedKey(
+                        mouseMoveMap.smallEyeKey,
+                        '小眼睛',
+                        mouseMoveMap.smallEyePos.x,
+                        mouseMoveMap.smallEyePos.y,
+                        'KMT_CLICK',
+                        {
+                            scale: 0.8,
+                            showMouse: true,
+                            resetView: true
+                        }
+                    );
+                }
+            }
+            
+            drawCanvas();
+            closeMouseMoveModal();
+        }
+        
+        // 关闭鼠标移动映射模态框
+        function closeMouseMoveModal() {
+            document.getElementById('mouseMoveModal').classList.remove('show');
+        }
+        
+        // 更新画布缩放
+        function updateCanvasZoom(zoom) {
+            const zoomValue = parseInt(zoom);
+            document.getElementById('zoomValue').textContent = zoomValue + '%';
+            
+            const scale = zoomValue / 100;
+            canvasContainer.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        }
+        
+        // 调整缩放
+        function adjustZoom(delta) {
+            const zoomSlider = document.getElementById('canvasZoom');
+            const currentZoom = parseInt(zoomSlider.value);
+            const newZoom = Math.max(25, Math.min(150, currentZoom + delta));
+            zoomSlider.value = newZoom;
+            updateCanvasZoom(newZoom);
+        }
+        
+        // 应用预设分辨率
+        function applyPresetResolution(preset) {
+            if (!preset) return;
+            
+            const [width, height] = preset.split('x').map(v => parseInt(v));
+            document.getElementById('canvasWidth').value = width;
+            document.getElementById('canvasHeight').value = height;
+            updateCanvasResolution();
+        }
+        
+        // 添加摇杆
+        function addSteeringWheel() {
+            const wheelType = confirm('选择摇杆类型：\n确定 - WASD摇杆\n取消 - 方向键摇杆');
+            
+            const config = wheelType ? {
+                upKey: 'Key_W',
+                downKey: 'Key_S', 
+                leftKey: 'Key_A',
+                rightKey: 'Key_D'
+            } : {
+                upKey: 'Key_Up',
+                downKey: 'Key_Down',
+                leftKey: 'Key_Left',
+                rightKey: 'Key_Right'
+            };
+            
+            createMappedKey('', '摇杆', 0.5, 0.5, 'KMT_STEER_WHEEL', config);
+        }
+        
+        // 初始化
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
