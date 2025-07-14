@@ -1,20 +1,20 @@
 {
   "name": "my-html-app",
-  "version": "O2",
+  "version": "2.0.0",
   "description": "QtScrcpy映射编辑器",
   "author": "NDooo",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder"
+    "clean": "rm -rf dist node_modules",
+    "build": "npm run clean && electron-builder"
   },
   "devDependencies": {
-    "electron": "^22.0.0",
-    "electron-builder": "^23.6.0"
+    "electron": "^29.0.0",
+    "electron-builder": "^24.13.0"
   },
   "build": {
     "appId": "com.qtscrcpy.editor",
-    "productName": "QtScrcpy Editor",
+    "productName": "QtScrcpy映射编辑器",
     "directories": {
       "output": "dist"
     },
@@ -22,6 +22,18 @@
       "target": "nsis",
       "icon": "icon.png"
     },
-    "publish": null
+    "extraResources": [
+      "icon.png",
+      "editor.html"
+    ],
+    "publish": null,
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "createDesktopShortcut": true,
+      "shortcutName": "QtScrcpy映射编辑器"
+    }
   }
 }
