@@ -9,12 +9,12 @@ jobs:
     runs-on: windows-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: 安装Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
-        node-version: '16'
+        node-version: '18'
         
     - name: 安装依赖
       run: npm install
@@ -23,7 +23,7 @@ jobs:
       run: npm run build
       
     - name: 上传结果
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: QtScrcpy编辑器EXE
         path: dist/
