@@ -25,7 +25,7 @@
     "extraResources": [
       "icon.png",
       "editor.html",
-      "preload.js" // 确保preload.js被包含在构建中
+      "preload.js"
     ],
     "publish": null,
     "nsis": {
