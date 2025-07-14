@@ -24,7 +24,8 @@
     },
     "extraResources": [
       "icon.png",
-      "editor.html"
+      "editor.html",
+      "preload.js" // 添加preload文件
     ],
     "publish": null,
     "nsis": {
