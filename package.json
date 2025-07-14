@@ -1,21 +1,18 @@
 {
   "name": "my-html-app",
   "version": "1.0.0",
-  "description": "",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder"
   },
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
     "electron": "^22.0.0",
     "electron-builder": "^23.6.0"
   },
   "build": {
-    "appId": "com.example.my-html-app",
-    "productName": "QtScrcpy编辑器",
+    "appId": "com.qtscrcpy.editor",
+    "productName": "QtScrcpy Editor",
     "directories": {
       "output": "dist"
     },
