@@ -24,8 +24,8 @@ jobs:
     - name: 打包应用
       run: npm run build
       
-    - name: 上传结果 (纯英文名称)
+    - name: 上传结果
       uses: actions/upload-artifact@v4
       with:
-        name: QtScrcpy_Editor  # 纯英文名称
+        name: QtScrcpy_Editor
         path: dist/
