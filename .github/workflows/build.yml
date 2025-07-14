@@ -1,0 +1,29 @@
+name: 打包EXE
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: 安装Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+        
+    - name: 安装依赖
+      run: npm install
+      
+    - name: 打包应用
+      run: npm run build
+      
+    - name: 上传结果
+      uses: actions/upload-artifact@v3
+      with:
+        name: QtScrcpy编辑器EXE
+        path: dist/
