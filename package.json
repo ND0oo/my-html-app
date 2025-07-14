@@ -20,7 +20,7 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "icon.png"  // 关键修改：指向 PNG 文件
+      "icon": "icon.png"
     },
     "publish": null
   }
