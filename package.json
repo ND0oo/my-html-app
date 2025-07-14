@@ -1,6 +1,8 @@
 {
   "name": "my-html-app",
-  "version": "1.0.0",
+  "version": "O2",
+  "description": "QtScrcpy映射编辑器",
+  "author": "NDooo",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -18,7 +20,7 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "icon.ico"  // 图标配置
+      "icon": "icon.png"  // 关键修改：指向 PNG 文件
     },
     "publish": null
   }
