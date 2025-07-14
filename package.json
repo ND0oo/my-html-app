@@ -17,7 +17,8 @@
       "output": "dist"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "icon.ico"  // 图标配置
     },
     "publish": null
   }
