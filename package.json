@@ -5,7 +5,7 @@
   "author": "NDooo",
   "main": "main.js",
   "scripts": {
-    "clean": "rm -rf dist node_modules",
+    "clean": "if exist dist rmdir /s /q dist && if exist node_modules rmdir /s /q node_modules",
     "build": "npm run clean && electron-builder"
   },
   "devDependencies": {
